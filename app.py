@@ -3,54 +3,48 @@ import pandas as pd
 import plotly.express as px
 import sqlite3
 from datetime import datetime
-import yfinance as yf # Per i metalli reali
+import yfinance as yf
 
 st.set_page_config(page_title="PocketFinance AI", layout="centered")
 
-# --- DATABASE ---
-conn = sqlite3.connect('finance_mobile.db', check_same_thread=False)
+# --- DATABASE LOCALE (Per ora usiamo questo) ---
+conn = sqlite3.connect('finance.db', check_same_thread=False)
 c = conn.cursor()
-c.execute('''CREATE TABLE IF NOT EXISTS trans (date TEXT, type TEXT, cat TEXT, amount REAL, acc TEXT, comm TEXT)''')
+c.execute('''CREATE TABLE IF NOT EXISTS trans (date TEXT, type TEXT, amount REAL, acc TEXT, comm TEXT)''')
 conn.commit()
 
-# --- TABS PER NAVIGAZIONE MOBILE ---
-tab1, tab2, tab3, tab4 = st.tabs(["➕ Inserisci", "📊 Analisi", "🤖 AI Advisor", "⛏️ Metalli"])
+st.title("💰 PocketFinance AI")
+
+# --- NAVIGAZIONE ---
+tab1, tab2, tab3 = st.tabs(["➕ Inserisci", "📊 Analisi", "⛏️ Metalli"])
 
 with tab1:
-    st.subheader("Nuova Transazione")
     with st.form("mobile_form", clear_on_submit=True):
-        tipo = st.segmented_control("Tipo", ["Entrata", "Uscita"])
-        conto = st.selectbox("Conto", ["Principale", "Risparmi", "Crypto/Invest"])
-        cifra = st.number_input("Importo (€)", step=1.0)
-        nota = st.text_input("A cosa si riferisce? (Commento)")
+        tipo = st.selectbox("Tipo", ["Uscita", "Entrata"])
+        conto = st.selectbox("Conto", ["Principale", "Risparmi", "Carta"])
+        cifra = st.number_input("Importo (€)", min_value=0.0, step=1.0)
+        nota = st.text_input("Commento")
         if st.form_submit_button("REGISTRA", use_container_width=True):
-            c.execute("INSERT INTO trans VALUES (?,?,?,?,?,?)", (datetime.now().date(), tipo, "Generale", cifra, conto, nota))
+            c.execute("INSERT INTO trans VALUES (?,?,?,?,?)", (datetime.now().strftime("%Y-%m-%d"), tipo, cifra, conto, nota))
             conn.commit()
-            st.success("Salvato!")
+            st.success("Registrato!")
 
 with tab2:
-    st.subheader("I tuoi Conti")
-    data = pd.read_sql_query("SELECT * FROM trans", conn)
-    if not data.empty:
-        # Calcolo percentuali automatiche
-        entrate = data[data['type']=='Entrata']['amount'].sum()
-        uscite = data[data['type']=='Uscita']['amount'].sum()
-        st.metric("Bilancio Totale", f"{entrate - uscite} €", delta=f"{entrate} € Entrate")
-        
-        # Grafico interattivo per mobile
-        fig = px.bar(data, x='date', y='amount', color='type', barmode='group', title="Andamento Settimanale")
+    df = pd.read_sql_query("SELECT * FROM trans", conn)
+    if not df.empty:
+        st.metric("Totale Spese", f"{df[df['type']=='Uscita']['amount'].sum()} €")
+        fig = px.bar(df, x='date', y='amount', color='type', title="Andamento")
         st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("Nessun dato registrato.")
 
 with tab3:
-    st.subheader("Chiedi all'AI")
-    user_q = st.text_input("Esempio: 'Posso permettermi una cena fuori?'")
-    if user_q:
-        # Qui collegheresti Gemini o GPT
-        st.info("L'AI sta analizzando i tuoi dati... (Simulazione: 'Basato sulle tue uscite di questa settimana, hai ancora 50€ di budget extra!')")
-
-with tab4:
-    st.subheader("Mercato Metalli")
-    # Esempio Rame (HG=F)
-    rame = yf.Ticker("HG=F").history(period="1mo")
-    st.line_chart(rame['Close'], title="Andamento Rame (Ultimo Mese)")
-    st.caption("Dati aggiornati dai mercati finanziari.")
+    st.subheader("Prezzo Rame (Real-time)")
+    try:
+        data_metal = yf.download("HG=F", period="1mo", interval="1d")
+        if not data_metal.empty:
+            st.line_chart(data_metal['Close'])
+        else:
+            st.warning("Dati metalli momentaneamente non disponibili.")
+    except Exception as e:
+        st.error("Errore nel caricamento metalli.")
