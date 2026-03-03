@@ -5,176 +5,135 @@ import yfinance as yf
 import os
 from datetime import datetime
 
-# --- CONFIGURAZIONE PAGINA ---
-st.set_page_config(page_title="PocketFinance AI - Engineering Pro", layout="wide")
+# --- 1. CONFIGURAZIONE E STILE (UI/UX) ---
+st.set_page_config(page_title="PocketFinance AI Pro", layout="wide")
 
-# File di database locali
+st.markdown("""
+    <style>
+    /* Sfondo sfumato professionale */
+    .stApp {
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        color: #e2e8f0;
+    }
+    /* Card per le metriche */
+    div[data-testid="stMetric"] {
+        background: rgba(255, 255, 255, 0.05);
+        padding: 20px;
+        border-radius: 15px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    /* Header e Tabs */
+    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
+    .stTabs [data-baseweb="tab"] {
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 10px 10px 0 0;
+        padding: 10px 20px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- 2. LOGICA DATI ---
 DB_FILE = "database_finanze.csv"
 SETTINGS_FILE = "settings_conti.csv"
 
-# --- LOGICA DI SISTEMA (INIZIALIZZAZIONE) ---
 def inizializza_files():
     if not os.path.exists(DB_FILE):
         pd.DataFrame(columns=['ID', 'Data', 'Tipo', 'Conto', 'Importo', 'Nota']).to_csv(DB_FILE, index=False)
     if not os.path.exists(SETTINGS_FILE):
-        # Conti iniziali suggeriti per il tuo percorso di 5 anni
-        pd.DataFrame({'Conto': ["Principale", "Risparmi Startup", "Emergenza", "Investimenti Chimica"]}).to_csv(SETTINGS_FILE, index=False)
-
-def get_lista_conti():
-    return pd.read_csv(SETTINGS_FILE)['Conto'].tolist()
-
-def aggiungi_nuovo_conto(nome):
-    df_c = pd.read_csv(SETTINGS_FILE)
-    if nome and nome not in df_c['Conto'].values:
-        nuovo = pd.concat([df_c, pd.DataFrame({'Conto': [nome]})], ignore_index=True)
-        nuovo.to_csv(SETTINGS_FILE, index=False)
-        return True
-    return False
-
-def elimina_conto_esistente(nome):
-    df_c = pd.read_csv(SETTINGS_FILE)
-    df_c = df_c[df_c['Conto'] != nome].to_csv(SETTINGS_FILE, index=False)
+        pd.DataFrame({'Conto': ["Principale", "Risparmi Startup", "Emergenza"]}).to_csv(SETTINGS_FILE, index=False)
 
 @st.cache_data(ttl=3600)
 def get_metal_data(ticker):
     try:
-        # Scarica dati dell'ultimo mese per analisi tecnica
         data = yf.download(ticker, period="1mo", interval="1d", progress=False)
         if not data.empty:
-            df_close = data['Close'].reset_index()
-            df_close.columns = ['Date', 'Price']
-            return df_close
+            df = data['Close'].reset_index()
+            df.columns = ['Date', 'Price']
+            return df
         return None
-    except:
-        return None
+    except: return None
 
-# Esegui i controlli iniziali
 inizializza_files()
 
-# --- INTERFACCIA UTENTE ---
-st.title("💰 PocketFinance AI: Financial Hub")
-st.caption("Strumento di gestione per Ingegneria Chimica & Future Startup")
-st.markdown("---")
+# --- 3. BARRA DI PROGRESSO E AI ENGINE ---
+def ai_advisor(df, metallo_prezzo):
+    st.subheader("🤖 AI Financial Insight")
+    if df.empty:
+        st.info("Inserisci dei dati per attivare l'analisi AI.")
+        return
 
-# Menu principale a Tab
-tab_ins, tab_gest, tab_conti, tab_metalli = st.tabs([
-    "➕ Inserisci", 
-    "🔍 Storico & Modifica", 
-    "🏦 Gestione Conti", 
-    "⛏️ Mercato Metalli"
-])
+    # Calcoli per AI
+    uscite_tot = df[df['Tipo'] == 'Uscita']['Importo'].sum()
+    entrate_tot = df[df['Tipo'] == 'Entrata']['Importo'].sum()
+    risparmio_ratio = (entrate_tot - uscite_tot) / entrate_tot if entrate_tot > 0 else 0
+    
+    col_ai1, col_ai2 = st.columns(2)
+    
+    with col_ai1:
+        if risparmio_ratio > 0.2:
+            st.success(f"Ottimo! Stai risparmiando il {risparmio_ratio:.0%}. Il tuo piano quinquennale è solido.")
+        else:
+            st.warning("Attenzione: il tasso di risparmio è basso. Riduci le uscite per non ritardare il lancio della tua startup.")
 
-# --- TAB 1: NUOVO MOVIMENTO ---
-with tab_ins:
-    st.subheader("Registra Operazione")
-    with st.form("form_movimento", clear_on_submit=True):
+    with col_ai2:
+        # Nota: Qui puoi personalizzare il consiglio in base al metallo scelto nel tab
+        st.info(f"Insight Settore: L'oscillazione dei metalli suggerisce di monitorare i costi di inventario per la tua futura azienda.")
+
+# --- 4. INTERFACCIA ---
+st.title("💰 PocketFinance AI Pro")
+st.caption("Engineering Financial Management System v3.0")
+
+# --- PROGRESS BAR STARTUP ---
+st.write("### 🚀 Obiettivo Startup (Capitale Target: 50.000€)")
+df_tot = pd.read_csv(DB_FILE)
+risparmi_startup = df_tot[(df_tot['Conto'] == 'Risparmi Startup') & (df_tot['Tipo'] == 'Entrata')]['Importo'].sum()
+target = 50000
+progresso = min(risparmi_startup / target, 1.0)
+st.progress(progresso)
+st.write(f"Hai accumulato **{risparmi_startup:.2f}€** del tuo obiettivo di {target}€ ({progresso:.1%})")
+
+tabs = st.tabs(["➕ Movimenti", "🔍 Gestione", "🏦 Conti", "⛏️ Metalli & AI"])
+
+with tabs[0]:
+    with st.form("entry"):
         c1, c2 = st.columns(2)
-        with c1:
-            tipo = st.selectbox("Tipo", ["Uscita", "Entrata"])
-            conto_scelto = st.selectbox("Conto di riferimento", get_lista_conti())
-        with c2:
-            importo = st.number_input("Importo (€)", min_value=0.0, step=0.01, format="%.2f")
-            nota = st.text_input("Commento (es: Reagenti, Libri, Cobalto)")
-        
-        if st.form_submit_button("SALVA NEL DATABASE"):
+        tipo = c1.selectbox("Tipo", ["Uscita", "Entrata"])
+        conto = c1.selectbox("Conto", pd.read_csv(SETTINGS_FILE)['Conto'].tolist())
+        importo = c2.number_input("Importo (€)", min_value=0.0)
+        nota = c2.text_input("Commento")
+        if st.form_submit_button("REGISTRA"):
             df = pd.read_csv(DB_FILE)
-            nuovo_id = int(df['ID'].max() + 1) if not df.empty else 1
-            nuova_riga = pd.DataFrame([[
-                nuovo_id, 
-                datetime.now().strftime("%Y-%m-%d %H:%M"), 
-                tipo, 
-                conto_scelto, 
-                importo, 
-                nota
-            ]], columns=['ID', 'Data', 'Tipo', 'Conto', 'Importo', 'Nota'])
-            pd.concat([df, nuova_riga], ignore_index=True).to_csv(DB_FILE, index=False)
-            st.success(f"Movimento salvato con ID: {nuovo_id}")
+            new_id = int(df['ID'].max() + 1) if not df.empty else 1
+            new_row = pd.DataFrame([[new_id, datetime.now().strftime("%Y-%m-%d"), tipo, conto, importo, nota]], 
+                                    columns=['ID', 'Data', 'Tipo', 'Conto', 'Importo', 'Nota'])
+            pd.concat([df, new_row], ignore_index=True).to_csv(DB_FILE, index=False)
+            st.rerun()
 
-# --- TAB 2: STORICO, RICERCA E ELIMINAZIONE ---
-with tab_gest:
-    st.subheader("Gestione Movimenti")
+with tabs[1]:
     df_db = pd.read_csv(DB_FILE)
-    
-    if not df_db.empty:
-        # Barra di ricerca e filtri
-        col_s1, col_s2 = st.columns([2, 1])
-        search_query = col_s1.text_input("Cerca tra le note...")
-        filtro_c = col_s2.multiselect("Filtra Conti", get_lista_conti())
-        
-        df_f = df_db.copy()
-        if search_query:
-            df_f = df_f[df_f['Nota'].str.contains(search_query, case=False, na=False)]
-        if filtro_c:
-            df_f = df_f[df_f['Conto'].isin(filtro_c)]
-        
-        st.dataframe(df_f.sort_values(by="ID", ascending=False), use_container_width=True, hide_index=True)
-        
-        st.markdown("---")
-        st.subheader("🗑️ Elimina o Modifica")
-        col_ed1, col_ed2 = st.columns([1, 2])
-        id_target = col_ed1.number_input("Inserisci ID da eliminare", min_value=0, step=1)
-        if col_ed2.button("ELIMINA MOVIMENTO SELEZIONATO", type="primary"):
-            df_db = df_db[df_db['ID'] != id_target]
-            df_db.to_csv(DB_FILE, index=False)
-            st.warning(f"ID {id_target} rimosso. L'app si riavvierà.")
-            st.rerun()
-    else:
-        st.info("Nessun dato presente. Inizia dal tab 'Inserisci'.")
+    st.dataframe(df_db.sort_values("ID", ascending=False), use_container_width=True, hide_index=True)
+    id_del = st.number_input("ID da eliminare", min_value=0, step=1)
+    if st.button("Elimina Movimento", type="primary"):
+        df_db[df_db['ID'] != id_del].to_csv(DB_FILE, index=False)
+        st.rerun()
 
-# --- TAB 3: GESTIONE CONTI (CREAZIONE/ELIMINAZIONE) ---
-with tab_conti:
-    st.subheader("I Tuoi Conti Correnti")
-    lista_attiva = get_lista_conti()
-    
-    for c in lista_attiva:
-        cols = st.columns([3, 1])
-        cols[0].write(f"💼 **{c}**")
-        if cols[1].button(f"Elimina {c}", key=f"btn_{c}"):
-            if len(lista_attiva) > 1:
-                elimina_conto_esistente(c)
-                st.rerun()
-            else:
-                st.error("Deve esserci almeno un conto attivo.")
-    
-    st.markdown("---")
-    st.subheader("➕ Aggiungi Nuovo Conto")
-    nuovo_c_nome = st.text_input("Nome conto (es: Satispay, Portafoglio)")
-    if st.button("CREA CONTO"):
-        if aggiungi_nuovo_conto(nuovo_c_nome):
-            st.success("Conto aggiunto!")
-            st.rerun()
+with tabs[2]:
+    st.subheader("Gestione Conti")
+    # Logica semplice per aggiungere/rimuovere conti
+    nuovo_c = st.text_input("Nuovo Conto")
+    if st.button("Aggiungi"):
+        df_c = pd.read_csv(SETTINGS_FILE)
+        pd.concat([df_c, pd.DataFrame({'Conto': [nuovo_c]})], ignore_index=True).to_csv(SETTINGS_FILE, index=False)
+        st.rerun()
 
-# --- TAB 4: METALLI (CON COBALTO) ---
-with tab_metalli:
-    st.subheader("⛏️ Materie Prime e Metalli Strategici")
+with tabs[3]:
+    st.subheader("Mercati & Analisi AI")
+    metalli = {"Rame": "HG=F", "Oro": "GC=F", "Litio": "LIT", "Cobalto": "COB.AX"}
+    m_choice = st.selectbox("Seleziona Metallo", list(metalli.keys()))
+    dati_m = get_metal_data(metalli[m_choice])
     
-    # Configurazione ticker: Per il Cobalto usiamo Cobalt Blue Holdings come indicatore
-    metalli_list = {
-        "Rame (Copper)": "HG=F",
-        "Oro (Gold)": "GC=F",
-        "Argento (Silver)": "SI=F",
-        "Litio (LIT ETF)": "LIT",
-        "Cobalto (Cobalt Proxy)": "COB.AX",
-        "Nichel (Nickel)": "NI=F",
-        "Palladio (Palladium)": "PA=F"
-    }
-    
-    scelta = st.selectbox("Seleziona Metallo", list(metalli_list.keys()))
-    ticker = metalli_list[scelta]
-    dati = get_metal_data(ticker)
-    
-    if dati is not None and not dati.empty:
-        ultimo_prezzo = float(dati['Price'].iloc[-1])
-        precedente = float(dati['Price'].iloc[-2]) if len(dati)>1 else ultimo_prezzo
-        delta = ultimo_prezzo - precedente
-        
-        m1, m2 = st.columns([1, 3])
-        m1.metric(label=f"Prezzo {scelta}", value=f"{ultimo_prezzo:.2f} USD", delta=f"{delta:.2f}")
-        
-        with m2:
-            fig = px.line(dati, x='Date', y='Price', title=f"Trend 30 Giorni - {scelta}")
-            fig.update_traces(line_color='#00d1b2')
-            st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.error(f"Dati non disponibili per {scelta}. Controlla la connessione o riprova.")
-
+    if dati_m is not None:
+        st.line_chart(dati_m.set_index('Date'))
+        # Attivazione AI
+        ai_advisor(df_tot, dati_m['Price'].iloc[-1])
