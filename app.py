@@ -128,4 +128,21 @@ with tabs[3]:
     st.metric(f"Prezzo {scelta} Reale", f"€ {p_kg:.2f} / kg")
     
     # Grafico (Fallback veloce)
-    dati = yf.download(info['t'], period
+    dati = yf.download(info['t'], period="1mo", progress=False)['Close'].reset_index()
+    dati.columns = ['Date', 'Price']
+    fig = px.line(dati, x='Date', y='Price', title=f"Trend Mensile {scelta}")
+    fig.update_layout(plot_bgcolor='black', paper_bgcolor='black', font_color='#0077ff')
+    st.plotly_chart(fig, use_container_width=True)
+
+# --- TAB 5: IMPOSTAZIONI ---
+with tabs[4]:
+    st.subheader("⚙️ Gestione Conti")
+    new_c = st.text_input("Nome nuovo conto")
+    if st.button("AGGIUNGI CONTO"):
+        pd.concat([df_conti, pd.DataFrame({'Conto': [new_c]})], ignore_index=True).to_csv(SETTINGS_FILE, index=False)
+        st.rerun()
+    
+    conto_del = st.selectbox("Rimuovi conto", df_conti['Conto'].tolist())
+    if st.button("RIMUOVI"):
+        df_conti[df_conti['Conto'] != conto_del].to_csv(SETTINGS_FILE, index=False)
+        st.rerun()
