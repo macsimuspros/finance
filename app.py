@@ -1,4 +1,16 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
+
+# Creiamo la connessione usando l'URL che hai messo nei Secrets
+conn = st.connection("gsheets", type=GSheetsConnection)
+
+# Leggiamo i dati (il foglio deve chiamarsi "Dati")
+df_db = conn.read(worksheet="Dati")
+
+st.title("Dashboard Finanziaria Startup")
+st.write("Dati caricati correttamente dal Cloud!")
+st.dataframe(df_db)
+import streamlit as st
 import pandas as pd
 import plotly.express as px
 import yfinance as yf
