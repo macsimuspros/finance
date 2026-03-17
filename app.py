@@ -21,59 +21,59 @@ def get_ip():
     return IP
 
 # --- CONNESSIONE DATI ---
-conn = st.connection("gsheets", type=GSheetsConnection)
-df = conn.read(worksheet="Dati")
+try:
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    df = conn.read(worksheet="Dati")
+except Exception as e:
+    st.error(f"Errore caricamento dati: {e}. Controlla il nome del foglio Google!")
+    st.stop()
 
 # --- CONFIGURAZIONE AI ---
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-model = genai.GenerativeModel('gemini-1.5-flash')
+if "GEMINI_API_KEY" in st.secrets:
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    model = genai.GenerativeModel('gemini-1.5-flash')
+else:
+    st.error("API Key mancante in secrets.toml!")
 
 # --- SIDEBAR (INFO TELEFONO) ---
 with st.sidebar:
-    st.title("📱 Mobile Link")
+    st.title("📱 Collegamento Mobile")
     ip_attuale = get_ip()
-    st.success(f"Vai su questo link dal telefono:\nhttp://{ip_attuale}:8501")
-    st.info("Obiettivo: Startup Ingegneria Chimica")
+    st.success(f"Dallo stesso Wi-Fi, apri sul telefono:\nhttp://{ip_attuale}:8501")
+    st.info("Ingegneria Chimica & Startup")
 
 # --- DASHBOARD ---
-st.title("🧪 ReactoFinance: Dashboard Integrata")
+st.title("📊 La tua Dashboard Finanziaria")
 
-# Calcolo saldo cumulativo per i "gradini"
+# GRAFICO A GRADINI
 if not df.empty:
     df['Data'] = pd.to_datetime(df['Data'])
     df_chart = df.sort_values('Data')
     df_chart['Saldo_Progressivo'] = df_chart['Importo'].cumsum()
-    
-    st.subheader("📈 Andamento Finanziario (Gradini)")
+    st.subheader("📈 Andamento Saldo (Effetto Gradini)")
     st.area_chart(df_chart.set_index('Data')['Saldo_Progressivo'])
 
-# --- CHAT AI CON MEMORIA DEI DATI ---
+# --- CHAT AI CONTESTUALE ---
 st.divider()
-st.subheader("🤖 Chiedi alla tua Startup AI")
-user_question = st.text_input("Esempio: 'Analizza i miei dati e dimmi se sto risparmiando per la startup'")
+st.subheader("🤖 Chiedi all'Assistente AI")
+user_question = st.text_input("Esempio: 'Com'è andata la mia settimana?'")
 
 if user_question:
-    # Qui diamo i dati a Gemini
-    contesto_dati = f"Ecco i miei dati finanziari attuali:\n{df.to_string(index=False)}\n\n"
-    domanda_completa = contesto_dati + "In base a questi dati, rispondi come un consulente esperto: " + user_question
-    
-    with st.spinner("L'AI sta elaborando i dati..."):
-        response = model.generate_content(domanda_completa)
-        st.markdown(f"**Risposta:** {response.text}")
+    # L'AI legge i dati reali dal foglio
+    contesto = f"Dati attuali: {df.to_string(index=False)}. Rispondi alla domanda: {user_question}"
+    with st.spinner("Analisi in corso..."):
+        response = model.generate_content(contesto)
+        st.write(response.text)
 
-# --- AGGIUNTA DATI (OTTIMIZZATA PER TELEFONO) ---
-st.divider()
-with st.expander("➕ Inserisci Nuova Spesa/Entrata"):
-    with st.form("new_entry"):
-        col1, col2 = st.columns(2)
-        with col1:
-            data = st.date_input("Data")
-            desc = st.text_input("Cosa hai comprato/guadagnato?")
-        with col2:
-            importo = st.number_input("Importo (€)", format="%.2f")
-        
-        if st.form_submit_button("Salva nel Cloud"):
-            new_row = pd.DataFrame([{"ID": len(df)+1, "Data": data, "Descrizione": desc, "Importo": importo}])
+# --- INPUT DATI ---
+with st.expander("📝 Registra Nuova Transazione"):
+    with st.form("entry_form"):
+        f_date = st.date_input("Data")
+        f_desc = st.text_input("Descrizione")
+        f_amt = st.number_input("Importo (€)")
+        if st.form_submit_button("Salva"):
+            new_row = pd.DataFrame([{"ID": len(df)+1, "Data": f_date, "Descrizione": f_desc, "Importo": f_amt}])
             updated_df = pd.concat([df, new_row], ignore_index=True)
             conn.update(worksheet="Dati", data=updated_df)
-            st.success("Dati inviati! Ricarica per vedere i gradini aggiornati.")
+            st.success("Sincronizzato!")
+            st.rerun()
