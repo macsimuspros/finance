@@ -5,7 +5,7 @@ import google.generativeai as genai
 from datetime import datetime
 import socket
 
-# --- 1. CONFIGURAZIONE ---
+# --- 1. SETUP PAGINA ---
 st.set_page_config(page_title="ReactoFinance Pro", layout="wide")
 
 def get_ip():
@@ -23,48 +23,63 @@ def get_ip():
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
     df = conn.read(worksheet="Dati")
-    if not df.empty:
-        df['Data'] = pd.to_datetime(df['Data'])
-        df['Importo'] = pd.to_numeric(df['Importo'])
+    # Pulizia nomi colonne e tipi (per evitare errori nei grafici)
+    df.columns = df.columns.str.strip()
+    df['Data'] = pd.to_datetime(df['Data'], dayfirst=True)
+    df['Importo'] = pd.to_numeric(df['Importo'])
 except Exception as e:
-    st.error("⚠️ Errore: Controlla permessi Google Sheet e nome scheda 'Dati'!")
+    st.error(f"⚠️ Errore Dati: Verifica che il file si chiami 'secrets.toml' e sia nella cartella .streamlit")
     st.stop()
 
 # --- 3. CONFIGURAZIONE AI ---
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-model = genai.GenerativeModel('gemini-1.5-flash')
+try:
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    model = genai.GenerativeModel('gemini-1.5-flash')
+except:
+    st.warning("🤖 AI non pronta: Controlla la chiave API!")
 
-# --- 4. SIDEBAR & TELEFONO ---
+# --- 4. SIDEBAR E LINK TELEFONO ---
 with st.sidebar:
-    st.title("📱 Mobile Connect")
-    st.success(f"Link Telefono: http://{get_ip()}:8501")
+    st.title("📱 Collegamento")
+    ip_pc = get_ip()
+    st.success(f"Usa questo link sul cellulare:\nhttp://{ip_pc}:8501")
+    st.info("Obiettivo: Startup Chimica 2030")
 
-# --- 5. GRAFICO A GRADINI ---
-st.title("🧪 Dashboard Ingegneria Chimica")
+# --- 5. GRAFICI A GRADINI ---
+st.title("🧪 Dashboard Reattore Finanziario")
+
 if not df.empty:
-    df_sorted = df.sort_values('Data')
-    df_sorted['Saldo'] = df_sorted['Importo'].cumsum()
-    st.subheader("📈 Andamento Saldo (Effetto Gradini)")
-    st.line_chart(df_sorted.set_index('Data')['Saldo'])
-    st.metric("Saldo Attuale", f"€ {df_sorted['Saldo'].iloc[-1]:,.2f}")
+    # Calcolo saldo cumulativo (i gradini)
+    df_chart = df.sort_values('Data').copy()
+    df_chart['Saldo_Cumulativo'] = df_chart['Importo'].cumsum()
+    
+    st.subheader("📈 Andamento Saldo nel Tempo")
+    st.area_chart(df_chart.set_index('Data')['Saldo_Cumulativo'])
+    
+    col1, col2 = st.columns(2)
+    col1.metric("Saldo Attuale", f"€ {df_chart['Saldo_Cumulativo'].iloc[-1]:,.2f}")
+    col2.metric("N. Operazioni", len(df))
 
-# --- 6. AI STRATEGICA ---
+# --- 6. INTERFACCIA AI ---
 st.divider()
-user_input = st.chat_input("Chiedi alla tua Startup AI...")
-if user_input:
-    context = f"Dati: {df.tail(5).to_string()}. Saldo: {df['Importo'].sum()}. Rispondi a: {user_input}"
-    with st.chat_message("assistant"):
-        response = model.generate_content(context)
-        st.write(response.text)
+st.subheader("🤖 Assistente Strategico AI")
+user_input = st.chat_input("Chiedi un'analisi o un consiglio per la startup...")
 
-# --- 7. INPUT NUOVI DATI ---
-with st.expander("📝 Registra Movimento"):
-    with st.form("entry_form", clear_on_submit=True):
+if user_input:
+    # L'AI legge i dati reali dal tuo foglio
+    context = f"Dati utente: {df.tail(10).to_string()}. Saldo: {df['Importo'].sum()}. Rispondi come consulente startup: {user_input}"
+    with st.spinner("L'AI sta analizzando i dati..."):
+        response = model.generate_content(context)
+        st.markdown(f"**AI:** {response.text}")
+
+# --- 7. REGISTRAZIONE RAPIDA ---
+with st.expander("📝 Aggiungi Movimento"):
+    with st.form("entry", clear_on_submit=True):
         f_date = st.date_input("Data", datetime.now())
-        f_desc = st.text_input("Descrizione")
+        f_desc = st.text_input("Nota (es. Stipendio, Reagenti)")
         f_amt = st.number_input("Importo (€)", step=0.01)
-        if st.form_submit_button("Salva nel Cloud"):
-            new_row = pd.DataFrame([{"ID": len(df)+1, "Data": f_date, "Descrizione": f_desc, "Importo": f_amt}])
+        if st.form_submit_button("Invia al Cloud"):
+            new_row = pd.DataFrame([{"ID": len(df)+1, "Data": f_date, "Importo": f_amt, "Nota": f_desc}])
             updated_df = pd.concat([df, new_row], ignore_index=True)
             conn.update(worksheet="Dati", data=updated_df)
             st.success("Sincronizzato!")
